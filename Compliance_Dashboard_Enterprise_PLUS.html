@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Compliance Dashboard — Enterprise PLUS</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" />
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" />
+<style>
+:root{
+  --bg:#0a0f15; --panel:#121a25; --ink:#e8edf3; --muted:#9aa7b6; --accent:#6bc1ff; --ok:#19c27c; --soon:#ffb020; --over:#ef4444; --line:#1d2736;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+.header{position:sticky;top:0;z-index:10;background:rgba(10,15,21,.85);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:10px}
+.header img{height:28px}
+.header h1{margin:0;font-size:18px}
+.header small{color:var(--muted);display:block}
+.container{max-width:1240px;margin:0 auto;padding:16px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px}
+.tab{background:var(--panel);border:1px solid var(--line);color:var(--ink);padding:10px 12px;border-radius:12px;cursor:pointer;font-weight:600;font-size:14px}
+.tab.active{outline:2px solid var(--accent)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+.grid{display:grid;gap:12px} .cols-2{grid-template-columns:1fr 1fr} .cols-3{grid-template-columns:repeat(3,1fr)}
+label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+.input, select, textarea{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:#0b121b;color:var(--ink)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.button{border:1px solid var(--line);background:#0b121b;color:#e8edf3;padding:10px 12px;border-radius:10px;cursor:pointer}
+.button.primary{background:var(--accent);color:#0a1220;border-color:transparent}
+.hint{font-size:12px;color:var(--muted)}
+.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin-top:10px}
+table{width:100%;border-collapse:collapse;min-width:980px;font-size:13px}
+th,td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{position:sticky;top:0;background:#0f1622;cursor:pointer;text-align:left}
+tr:hover td{background:rgba(255,255,255,0.02)}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;background:#0b111b;border:1px solid var(--line);font-size:11px;color:var(--muted)}
+.status{display:inline-flex;align-items:center;gap:6px} .dot{width:8px;height:8px;border-radius:999px;display:inline-block;background:var(--muted)}
+.ok .dot{background:var(--ok)} .soon .dot{background:var(--soon)} .over .dot{background:var(--over)}
+.drop{border:1px dashed var(--line);border-radius:12px;padding:16px;text-align:center;background:#0c1320}
+pre{white-space:pre-wrap;word-break:break-word} kbd{background:#0b111b;border:1px solid var(--line);padding:2px 6px;border-radius:6px}
+.footer{color:var(--muted);font-size:12px;padding:16px;text-align:center}
+.small{font-size:12px}
+</style>
+</head>
+<body>
+  <div class="header">
+    <img id="brandLogo" alt="" style="display:none"/>
+    <div>
+      <h1>Compliance Dashboard — Enterprise <span style="opacity:.6">PLUS</span></h1>
+      <small>Per-entity materiality • LODR due dates • Slack/Teams digest • Live feed auto-refresh • Branding</small>
+    </div>
+  </div>
+  <div class="container">
+    <div class="tabs">
+      <button class="tab active" data-tab="dashboard">Dashboard</button>
+      <button class="tab" data-tab="entities">Entities</button>
+      <button class="tab" data-tab="import">Import</button>
+      <button class="tab" data-tab="integrations">Integrations</button>
+      <button class="tab" data-tab="settings">Settings</button>
+      <button class="tab" data-tab="about">About</button>
+    </div>
+    <div id="panel" class="card"></div>
+    <div class="footer">Press <kbd>/</kbd> to search • click headers to sort • export ICS/CSV • logo lives in your browser storage.</div>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+const SAMPLE_FEED = {"global": {"materialityCrore": 1.5, "csrThresholds": {"netWorthCr": 500, "turnoverCr": 1000, "netProfitCr": 5}, "outstandingNCSCr": 0, "mcapCr": 7247}, "entities": [{"name": "Max Estates Limited (MEL)", "agm": "2025-09-18", "owners": {"cs": "Abhishek Mishra", "finance": "Nitin Kumar Kansal"}, "facts": {"turnoverCr": 120.0, "netWorthCr": 650.0, "netProfitCr": 40.8}, "materialityCr": 2.0}, {"name": "Max Asset Services Limited", "agm": "2025-09-30", "owners": {"cs": "Company Secretary (Group)", "finance": "Finance Lead"}, "facts": {"turnoverCr": 45.2, "netWorthCr": 110.0, "netProfitCr": 3.1}, "materialityCr": 0.5}, {"name": "Max Square Limited", "agm": "2025-09-25", "owners": {"cs": "Company Secretary (Group)", "finance": "Finance Lead"}, "facts": {}, "materialityCr": 0.5}, {"name": "Acreage Builders Private Limited", "agm": "2025-09-25", "owners": {"cs": "Company Secretary (Group)", "finance": "Finance Lead"}, "facts": {}, "materialityCr": 0.5}, {"name": "Pharmax Corporation Limited", "agm": "2025-09-25", "owners": {"cs": "Company Secretary (Group)", "finance": "Finance Lead"}, "facts": {}, "materialityCr": 0.5}, {"name": "Max Towers Private Limited", "agm": "2025-09-25", "owners": {"cs": "Company Secretary (Group)", "finance": "Finance Lead"}, "facts": {}, "materialityCr": 0.5}, {"name": "Max Estates Noida Private Limited", "agm": "2025-09-25", "owners": {"cs": "Company Secretary (Group)", "finance": "Finance Lead"}, "facts": {}, "materialityCr": 0.5}, {"name": "Boulevard Projects Private Limited", "agm": "2025-09-25", "owners": {"cs": "Company Secretary (Group)", "finance": "Finance Lead"}, "facts": {}, "materialityCr": 0.5}]};
+
+const DEFAULTS = {
+  currency: "INR",
+  materialityCrore: 1.5,
+  materialityByEntity: {},
+  csrThresholds: { netWorthCr: 500, turnoverCr: 1000, netProfitCr: 5 },
+  outstandingNCSCr: 0,
+  mcapCr: 0,
+  rmcAppliesIfTop1000: true,
+  reminderDaysSoon: 15,
+  liveFeedUrl: "",
+  liveFeedRefreshMins: 0,
+  xbrlMap: {
+    netWorth: ["networth", "shareholder", "equity"],
+    turnover: ["revenue", "totalincome", "turnover"],
+    netProfit: ["profitaftertax", "pat", "netprofit"]
+  },
+  entities: SAMPLE_FEED.entities,
+  owners: {
+    "*": { cs:"Company Secretary (Group)", finance:"Finance Lead" },
+    "Max Estates Limited (MEL)": { cs:"Abhishek Mishra", finance:"Nitin Kumar Kansal" }
+  },
+  facts: {
+    "Max Estates Limited (MEL)": { turnoverCr: 120, netWorthCr: 650, netProfitCr: 40.8 },
+    "Max Asset Services Limited": { turnoverCr: 45.2, netWorthCr: 110, netProfitCr: 3.1 }
+  },
+  slackWebhook: "",
+  teamsWebhook: "",
+  brandLogoDataUrl: ""
+};
+
+let state = load();
+state.global = state.global || {}
+
+function load(){
+  try{ 
+    const s = JSON.parse(localStorage.getItem("cd_enterprise_plus")||"null");
+    if(!s) return JSON.parse(JSON.stringify(DEFAULTS));
+    return deepMerge(JSON.parse(JSON.stringify(DEFAULTS)), s);
+  }catch(e){ return JSON.parse(JSON.stringify(DEFAULTS)); }
+}
+function save(){ localStorage.setItem("cd_enterprise_plus", JSON.stringify(state)); }
+
+function deepMerge(a,b){
+  if(Array.isArray(a) && Array.isArray(b)) return b;
+  if(a && typeof a==='object' && b && typeof b==='object'){
+    for(const k of Object.keys(b)) a[k] = k in a ? deepMerge(a[k], b[k]) : b[k];
+    return a;
+  }
+  return b;
+}
+
+function createEl(t, attrs={}, children=[]){ const el=document.createElement(t); for(const [k,v] of Object.entries(attrs)){ if(k==='class') el.className=v; else if(k==='html') el.innerHTML=v; else el.setAttribute(k,v); } (children||[]).forEach(c=>el.appendChild(c)); return el; }
+function normalize(s){ return String(s||'').toLowerCase(); }
+function fmtCr(n){ if(n==null||n==="") return ""; const x=Number(n); if(Number.isNaN(x)) return n; return x.toLocaleString('en-IN')+" Cr"; }
+function addDays(d, days){ const dt=new Date(d); dt.setDate(dt.getDate()+days); return dt.toISOString().slice(0,10); }
+function statusClass(dateStr){ if(!dateStr) return "status"; const d=new Date(dateStr); const today=new Date(); today.setHours(0,0,0,0); const soonDays=state.reminderDaysSoon; if(d<today) return "status over"; const soon=new Date(); soon.setDate(today.getDate()+soonDays); if(d<=soon) return "status soon"; return "status ok"; }
+function download(filename, text){ const blob=new Blob([text],{type:"text/plain;charset=utf-8;"}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click(); URL.revokeObjectURL(a.href);}
+function exportCSV(rows,name="compliance_export.csv"){ if(!rows.length) return; const headers=Object.keys(rows[0]); const csv=[headers.join(',')].concat(rows.map(r=>headers.map(h=>('"' + String(r[h]??'').replace(/"/g,'""') + '"')).join(','))).join('\n'); download(name,csv); }
+function exportICS(items){ const lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//CD-Enterprise-PLUS//IN"]; for(const it of items){ if(!it["Next Due Date"]) continue; const d=it["Next Due Date"].replace(/-/g,""); const uid=Math.random().toString(36).slice(2); lines.push("BEGIN:VEVENT","UID:"+uid+"@cde+","DTSTAMP:"+d+"T090000Z","DTSTART:"+d,"SUMMARY:"+it["Entity"]+" — "+it["Compliance Item"],"DESCRIPTION:"+(it["Notes"]||""),"END:VEVENT"); } lines.push("END:VCALENDAR"); download("compliance_calendar.ics", lines.join("\r\n")); }
+function entityMateriality(name){ const pe = state.materialityByEntity && state.materialityByEntity[name]; return (pe!=null && pe!=="") ? Number(pe) : Number(state.materialityCrore); }
+
+(function showLogo(){ if(state.brandLogoDataUrl){ const img=document.getElementById('brandLogo'); img.src=state.brandLogoDataUrl; img.style.display='block'; } })();
+
+function nextQuarterEnd() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const qEnds = [ new Date(y, 2, 31), new Date(y, 5, 30), new Date(y, 8, 30), new Date(y, 11, 31) ];
+  for(const qe of qEnds){ qe.setHours(0,0,0,0); if(qe > now) return qe; }
+  return new Date(y+1, 2, 31);
+}
+function lodrDueDates() {
+  const qe = nextQuarterEnd();
+  const d21 = new Date(qe); d21.setDate(d21.getDate()+21);
+  const d45 = new Date(qe); d45.setDate(d45.getDate()+45);
+  function iso(d){ return d.toISOString().slice(0,10); }
+  return { qe: iso(qe), reg31: iso(d21), reg27: iso(d21), reg33_q: iso(d45) };
+}
+
+function computeApplicability(entityName){
+  const f=(state.facts[entityName]||{});
+  const t=state.csrThresholds||DEFAULTS.csrThresholds;
+  const out={ csr:false, hvdle:false, rmc:false };
+  out.csr = (Number(f.netWorthCr)>=t.netWorthCr) || (Number(f.turnoverCr)>=t.turnoverCr) || (Number(f.netProfitCr)>=t.netProfitCr);
+  out.hvdle = Number(state.outstandingNCSCr)>=1000;
+  out.rmc = (state.rmcAppliesIfTop1000===true) || out.hvdle;
+  return out;
+}
+function computeAGMDerived(entityName){
+  const e=state.entities.find(x=>x.name===entityName);
+  const agm=e && e.agm ? e.agm : "";
+  return { agm, aoc4: agm? addDays(agm,30):"", mgt7: agm? addDays(agm,60):"" };
+}
+function ownerFor(entity, role){ const e=(state.owners[entity]||state.owners["*"]||{}); return e[role]||""; }
+
+const PANEL=document.getElementById('panel');
+
+function renderDashboard(){
+  PANEL.innerHTML="";
+  const lodr = lodrDueDates();
+  const top=createEl('div',{class:'grid cols-3'},[
+    stat("Materiality (global)", "₹ "+(state.materialityCrore)+" Cr", "Overrides per-entity where provided"),
+    stat("Outstanding NCS", fmtCr(state.outstandingNCSCr||0), "HVDLE if ≥ ₹1,000 Cr"),
+    stat("Next QE (LODR)", lodr.qe, "Reg 31/27 due "+lodr.reg31+" • Reg 33 (Q) "+lodr.reg33_q)
+  ]);
+  PANEL.appendChild(top);
+  PANEL.appendChild(createEl('hr'));
+  const tasks=[];
+  for(const e of state.entities){
+    const a=computeApplicability(e.name); const d=computeAGMDerived(e.name);
+    const mat = entityMateriality(e.name);
+    tasks.push(row(e.name,"Companies Act","AOC-4 — Financials (Sec 137)","Yes",ownerFor(e.name,'cs')+" + "+ownerFor(e.name,'finance'),d.aoc4,"Within 30 days of AGM",d.agm, mat));
+    tasks.push(row(e.name,"Companies Act","MGT-7 — Annual Return (Sec 92)","Yes",ownerFor(e.name,'cs'),d.mgt7,"Within 60 days of AGM",d.agm, mat));
+    tasks.push(row(e.name,"Companies Act","CSR — Committee/Spend/Disclosures",a.csr? "Yes":"Check thresholds",ownerFor(e.name,'cs'),"","Auto: Net worth ≥500 / Turnover ≥1000 / Net profit ≥5","", mat));
+    if(e.name==="Max Estates Limited (MEL)"){ 
+      tasks.push(row(e.name,"SEBI LODR","Reg 31 — Shareholding Pattern (Q)","Yes",ownerFor(e.name,'cs'),lodr.reg31,"Within 21 days of QE ("+lodr.qe+")","", mat));
+      tasks.push(row(e.name,"SEBI LODR","Reg 27(2) — CG Report (Q)","Yes",ownerFor(e.name,'cs'),lodr.reg27,"Within 21 days of QE ("+lodr.qe+")","", mat));
+      tasks.push(row(e.name,"SEBI LODR","Reg 33 — Financial Results (Q/A)","Yes",ownerFor(e.name,'cs')+" + "+ownerFor(e.name,'finance'),lodr.reg33_q,"Q:45 days from QE ("+lodr.qe+")","", mat));
+      tasks.push(row(e.name,"SEBI LODR","Reg 21 — Risk Management Committee",a.rmc? "Applicable":"Not applicable",ownerFor(e.name,'cs'),"","Top-1000 or HVDLE","", mat));
+    }
+  }
+  const controls=createEl('div',{class:'row'});
+  const search=createEl('input',{class:'input',placeholder:'Search tasks… (Press / to focus)'});
+  const sel=createEl('select',{}); sel.appendChild(createEl('option',{value:'All'},[document.createTextNode('All entities')])); state.entities.forEach(e=> sel.appendChild(createEl('option',{value:e.name},[document.createTextNode(e.name)])));
+  const btnCSV=createEl('button',{class:'button'},[document.createTextNode('Export CSV')]); 
+  const btnICS=createEl('button',{class:'button'},[document.createTextNode('Export ICS')]);
+  const btnDigest=createEl('button',{class:'button primary'},[document.createTextNode('Send Digest (Slack/Teams)')]);
+  controls.appendChild(createEl('span',{class:'badge'},[document.createTextNode('Entity')])); controls.appendChild(sel);
+  controls.appendChild(btnCSV); controls.appendChild(btnICS); controls.appendChild(btnDigest);
+  PANEL.appendChild(controls);
+  const tw=createEl('div',{class:'table-wrap'}); const table=createEl('table'); const thead=createEl('thead'); const trh=createEl('tr');
+  ["Entity","Law/Reg","Compliance Item","Applicable?","Owner","AGM (FY25)","Next Due Date","Notes","Materiality (₹ Cr)","Status"].forEach(h=> trh.appendChild(createEl('th',{},[document.createTextNode(h)])));
+  thead.appendChild(trh); table.appendChild(thead); const tbody=createEl('tbody'); table.appendChild(tbody); tw.appendChild(table); PANEL.appendChild(tw);
+  let rows=tasks.slice(); let sort={key:null,dir:1};
+  function rerender(){
+    const q=normalize(search.value); const ent=sel.value;
+    let list=rows.filter(r=> (ent==='All'||r["Entity"]===ent) && Object.values(r).some(v=> normalize(v).includes(q)));
+    if(sort.key) list.sort((a,b)=> String(a[sort.key]??'').localeCompare(String(b[sort.key]??''))*sort.dir);
+    tbody.innerHTML=""; list.forEach(r=>{ const tr=createEl('tr'); ["Entity","Law/Reg","Compliance Item","Applicable?","Owner","AGM (FY25)","Next Due Date","Notes","Materiality (₹ Cr)"].forEach(k=> tr.appendChild(createEl('td',{},[document.createTextNode(r[k]||"")]))); const sc=statusClass(r["Next Due Date"]); const td=createEl('td',{}); td.appendChild(createEl('span',{class:(sc+" small")},[createEl('span',{class:'dot'}), document.createTextNode(sc.includes('over')?'Overdue':sc.includes('soon')?'Due soon':'On track')])); tr.appendChild(td); tbody.appendChild(tr); });
+  }
+  Array.from(trh.children).forEach((th,i)=> th.addEventListener('click',()=>{ const keys=["Entity","Law/Reg","Compliance Item","Applicable?","Owner","AGM (FY25)","Next Due Date","Notes","Materiality (₹ Cr)","Status"]; sort.key = keys[i]==="Status"?"Next Due Date":keys[i]; sort.dir*=-1; rerender(); }));
+  search.addEventListener('input',rerender); document.addEventListener('keydown',e=>{ if(e.key==='/'&&document.activeElement!==search){ e.preventDefault(); search.focus(); } });
+  sel.addEventListener('change',rerender); btnCSV.addEventListener('click',()=> exportCSV(rows)); btnICS.addEventListener('click',()=> exportICS(rows));
+  btnDigest.addEventListener('click', ()=> sendDigestNow(21));
+  rerender();
+}
+function row(entity,law,item,app,owner,due,notes,agm,mat){ return {"Entity":entity,"Law/Reg":law,"Compliance Item":item,"Applicable?":app,"Owner":owner,"AGM (FY25)":agm||"","Next Due Date":due||"","Notes":notes||"","Materiality (₹ Cr)": mat ?? ""}; }
+function stat(title,val,sub){ return createEl('div',{class:'card'},[createEl('div',{class:'small',html:title}),createEl('div',{style:"font-size:22px;font-weight:700;margin-top:6px"},[document.createTextNode(val)]),createEl('div',{class:'hint',html:sub||""})]); }
+
+function renderEntities(){
+  PANEL.innerHTML="";
+  const tools=createEl('div',{class:'row'},[
+    btn("Add Entity",()=>{ state.entities.push({name:"New Entity", agm:""}); save(); draw(); }),
+    btn("Save",()=>{ save(); alert("Saved"); }),
+    btn("Export JSON",()=> download("cd_enterprise_plus_state.json", JSON.stringify(state,null,2))),
+    btn("Import JSON",()=> fileInp.click()),
+    btn("Load Sample Feed",()=> mergeFeed(SAMPLE_FEED))
+  ]);
+  const fileInp=createEl('input',{type:'file',accept:'.json',style:'display:none'});
+  fileInp.addEventListener('change',()=>{ const f=fileInp.files[0]; if(!f) return; const r=new FileReader(); r.onload=e=>{ try{ const feed=JSON.parse(e.target.result); mergeFeed(feed); }catch(err){ alert("Invalid JSON"); } }; r.readAsText(f); });
+  PANEL.appendChild(tools); PANEL.appendChild(fileInp);
+
+  const wrap=createEl('div',{class:'table-wrap'}); const table=createEl('table'); const thead=createEl('thead'); const trh=createEl('tr');
+  ["Entity","AGM (YYYY-MM-DD)","Turnover (₹ Cr)","Net Worth (₹ Cr)","Net Profit (₹ Cr)","Materiality (₹ Cr)","CS Owner","Finance Owner"].forEach(h=> trh.appendChild(createEl('th',{},[document.createTextNode(h)])));
+  thead.appendChild(trh); table.appendChild(thead); const tbody=createEl('tbody'); table.appendChild(tbody); wrap.appendChild(table); PANEL.appendChild(wrap);
+
+  function draw(){
+    tbody.innerHTML=""; state.entities.forEach(e=>{ const tr=createEl('tr');
+      tr.appendChild(tdText(e,'name')); tr.appendChild(tdInput(e,'agm','date'));
+      const f=state.facts[e.name]||{}; tr.appendChild(tdNum(f,'turnoverCr',e.name)); tr.appendChild(tdNum(f,'netWorthCr',e.name)); tr.appendChild(tdNum(f,'netProfitCr',e.name));
+      tr.appendChild(tdMat(e.name)); tr.appendChild(tdOwner(e.name,'cs')); tr.appendChild(tdOwner(e.name,'finance'));
+      tbody.appendChild(tr);
+    });
+  }
+  function tdText(obj,key){ const inp=createEl('input',{class:'input', value: obj[key]}); inp.addEventListener('input',()=> obj[key]=inp.value); return createEl('td',{},[inp]); }
+  function tdInput(obj,key,type='text'){ const inp=createEl('input',{class:'input', type, value: obj[key]||""}); inp.addEventListener('input',()=> obj[key]=inp.value); return createEl('td',{},[inp]); }
+  function tdNum(facts,key,ent){ const inp=createEl('input',{class:'input', type:'number', step:'0.01', value: facts[key]??""}); inp.addEventListener('input',()=>{ state.facts[ent]=state.facts[ent]||{}; state.facts[ent][key]=inp.value===""?"":Number(inp.value); }); return createEl('td',{},[inp]); }
+  function tdMat(ent){ const val = (state.materialityByEntity && state.materialityByEntity[ent]) ?? ""; const inp=createEl('input',{class:'input', type:'number', step:'0.01', value: val}); inp.addEventListener('input',()=>{ state.materialityByEntity = state.materialityByEntity || {}; state.materialityByEntity[ent] = inp.value===""? "" : Number(inp.value); }); return createEl('td',{},[inp]); }
+  function tdOwner(ent,role){ const cur=(state.owners[ent]&&state.owners[ent][role])||(state.owners["*"]&&state.owners["*"][role])||""; const inp=createEl('input',{class:'input', value: cur}); inp.addEventListener('input',()=>{ state.owners[ent]=state.owners[ent]||{}; state.owners[ent][role]=inp.value; }); return createEl('td',{},[inp]); }
+  function btn(t,fn){ const b=createEl('button',{class:'button'},[document.createTextNode(t)]); b.addEventListener('click',fn); return b; }
+  draw();
+}
+
+function renderImport(){
+  PANEL.innerHTML="";
+  PANEL.appendChild(feedCard());
+  PANEL.appendChild(createEl('hr'));
+  PANEL.appendChild(createEl('div',{class:'grid cols-3'},[excelCard(), pdfCard(), xbrlCard()]));
+  PANEL.appendChild(createEl('hr'));
+  PANEL.appendChild(helpCard());
+}
+
+function feedCard(){
+  const card=createEl('div',{class:'card'});
+  card.appendChild(createEl('h3',{},[document.createTextNode("Live JSON Feed")]));
+  const url=createEl('input',{class:'input', placeholder:'https://your-endpoint.example.com/compliance-feed.json', value: state.liveFeedUrl||""});
+  const mins=createEl('input',{class:'input', type:'number', step:'1', value: state.liveFeedRefreshMins||0});
+  const row=createEl('div',{class:'row'},[createEl('button',{class:'button primary'},[document.createTextNode('Fetch & Merge')]), createEl('button',{class:'button'},[document.createTextNode('Save Auto-Refresh')])]);
+  const log=createEl('pre',{class:'small'});
+  row.children[0].addEventListener('click',async()=>{ try{ const res=await fetch(url.value,{mode:'cors'}); const feed=await res.json(); mergeFeed(feed); log.textContent="Merged "+(feed.entities?.length||0)+" entities from feed."; }catch(e){ log.textContent="Fetch failed: "+e; } });
+  row.children[1].addEventListener('click',()=>{ state.liveFeedUrl=url.value; state.liveFeedRefreshMins = Number(mins.value)||0; save(); setupAutoRefresh(); alert("Saved."); });
+  card.appendChild(createEl('label',{},[document.createTextNode("Feed URL")])); card.appendChild(url);
+  card.appendChild(createEl('label',{},[document.createTextNode("Auto-refresh every (mins, 0 = off)")])); card.appendChild(mins);
+  card.appendChild(row); card.appendChild(log); return card;
+}
+
+let refreshTimer = null;
+function setupAutoRefresh(){
+  if(refreshTimer) clearInterval(refreshTimer);
+  if(state.liveFeedRefreshMins && state.liveFeedUrl){
+    refreshTimer = setInterval(async()=>{
+      try{ const res=await fetch(state.liveFeedUrl,{mode:'cors'}); const feed=await res.json(); mergeFeed(feed); }catch(e){ /* silent */ }
+    }, Math.max(1, state.liveFeedRefreshMins) * 60 * 1000);
+  }
+}
+
+function mergeFeed(feed){
+  if(feed.global){
+    if(typeof feed.global.materialityCrore==='number') state.materialityCrore=feed.global.materialityCrore;
+    if(feed.global.csrThresholds) state.csrThresholds=deepMerge(state.csrThresholds||{}, feed.global.csrThresholds);
+    if(typeof feed.global.outstandingNCSCr==='number') state.outstandingNCSCr=feed.global.outstandingNCSCr;
+    if(typeof feed.global.mcapCr==='number') state.mcapCr=feed.global.mcapCr;
+  }
+  if(Array.isArray(feed.entities)){
+    feed.entities.forEach(e=>{
+      const idx=state.entities.findIndex(x=>x.name===e.name);
+      if(idx>-1) state.entities[idx]=deepMerge(state.entities[idx], {name:e.name, agm:e.agm||""}); else state.entities.push({name:e.name, agm:e.agm||""});
+      if(e.owners){ state.owners[e.name]=deepMerge(state.owners[e.name]||{}, e.owners); }
+      if(e.facts){ state.facts[e.name]=deepMerge(state.facts[e.name]||{}, e.facts); }
+      if(e.materialityCr!=null){ state.materialityByEntity = state.materialityByEntity || {}; state.materialityByEntity[e.name] = e.materialityCr; }
+    });
+  }
+  save();
+  const active=document.querySelector('.tab.active')?.getAttribute('data-tab');
+  if(active==='entities') renderEntities(); else renderDashboard();
+}
+
+function excelCard(){
+  const card=createEl('div',{class:'card'}); card.appendChild(createEl('h3',{},[document.createTextNode("Excel Import (SheetJS)")]));
+  const drop=createEl('div',{class:'drop'},[document.createTextNode("Drop .xlsx here or click to browse")]);
+  const file=createEl('input',{type:'file',accept:'.xlsx,.xls',style:'display:none'});
+  drop.addEventListener('click',()=> file.click());
+  drop.addEventListener('dragover',e=>{ e.preventDefault(); drop.style.background="#0e1730"; });
+  drop.addEventListener('dragleave',()=> drop.style.background="");
+  drop.addEventListener('drop',e=>{ e.preventDefault(); handle(e.dataTransfer.files[0]); drop.style.background=""; });
+  const log=createEl('pre',{class:'small'}); card.appendChild(drop); card.appendChild(file); card.appendChild(log);
+  function handle(f){
+    const reader=new FileReader();
+    reader.onload=e=>{
+      try{ const wb=XLSX.read(e.target.result,{type:'binary'}); const names=wb.SheetNames; const arr=XLSX.utils.sheet_to_json(wb.Sheets[names[0]],{header:1,raw:true});
+        const pick=(kw)=>{ const low=kw.toLowerCase(); for(let r=0;r<arr.length;r++) for(let c=0;c<arr[r].length;c++) if(String(arr[r][c]).toLowerCase().includes(low)) for(let cc=c+1;cc<arr[r].length;cc++) if(typeof arr[r][cc]==='number') return arr[r][cc]; return null; };
+        const turnover=pick("turnover") ?? pick("total income") ?? pick("revenue");
+        const networth=pick("net worth") ?? pick("networth");
+        const netprofit=pick("profit after tax") ?? pick("pat") ?? pick("net profit");
+        const toCr=(x)=> x==null? "": (Math.abs(x)>1e7? (x/1e7) : x);
+        const ent=state.entities[0]?.name || "Entity";
+        state.facts[ent]=state.facts[ent]||{};
+        if(turnover!=null) state.facts[ent].turnoverCr=Number(toCr(turnover).toFixed(2));
+        if(networth!=null) state.facts[ent].netWorthCr=Number(toCr(networth).toFixed(2));
+        if(netprofit!=null) state.facts[ent].netProfitCr=Number(toCr(netprofit).toFixed(2));
+        save(); log.textContent="Mapped to "+ent+" — Turnover:"+state.facts[ent].turnoverCr+" | Net Worth:"+state.facts[ent].netWorthCr+" | Net Profit:"+state.facts[ent].netProfitCr;
+      }catch(err){ log.textContent="Excel parse failed: "+err; }
+    }; reader.readAsBinaryString(f);
+  }
+  file.addEventListener('change',()=> file.files[0] && handle(file.files[0]));
+  return card;
+}
+function pdfCard(){
+  const card=createEl('div',{class:'card'}); card.appendChild(createEl('h3',{},[document.createTextNode("PDF Import (pdf.js)")]));
+  const drop=createEl('div',{class:'drop'},[document.createTextNode("Drop AR/FS PDF here or click to browse")]);
+  const file=createEl('input',{type:'file',accept:'.pdf',style:'display:none'});
+  drop.addEventListener('click',()=> file.click());
+  drop.addEventListener('dragover',e=>{ e.preventDefault(); drop.style.background="#0e1730"; });
+  drop.addEventListener('dragleave',()=> drop.style.background="");
+  drop.addEventListener('drop',e=>{ e.preventDefault(); handle(e.dataTransfer.files[0]); drop.style.background=""; });
+  const log=createEl('pre',{class:'small'}); card.appendChild(drop); card.appendChild(file); card.appendChild(log);
+  pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  async function handle(f){
+    const buf=await f.arrayBuffer(); const pdf=await pdfjsLib.getDocument({data:buf}).promise; let text="";
+    for(let i=1;i<=Math.min(pdf.numPages,10);i++){ const page=await pdf.getPage(i); const content=await page.getTextContent(); text+=" "+content.items.map(it=>it.str).join(" "); }
+    const t=text.toLowerCase(); const num=(m)=> m && m[1] ? Number(m[1].replace(/[, ]+/g,'')) : null;
+    const turnover=num(t.match(/(revenue from operations|total income)\D+([\d, ]{3,})/)); const networth=num(t.match(/net worth\D+([\d, ]{3,})/)); const netprofit=num(t.match(/(profit after tax|pat|net profit)\D+([\d, ]{3,})/));
+    const toCr=(x)=> x==null? "": (Math.abs(x)>1e7? (x/1e7) : x); const ent=state.entities[0]?.name || "Entity";
+    state.facts[ent]=state.facts[ent]||{};
+    if(turnover!=null) state.facts[ent].turnoverCr=Number(toCr(turnover).toFixed(2));
+    if(networth!=null) state.facts[ent].netWorthCr=Number(toCr(networth).toFixed(2));
+    if(netprofit!=null) state.facts[ent].netProfitCr=Number(toCr(netprofit).toFixed(2));
+    save(); log.textContent="Mapped to "+ent+" — Turnover:"+state.facts[ent].turnoverCr+" | Net Worth:"+state.facts[ent].netWorthCr+" | Net Profit:"+state.facts[ent].netProfitCr;
+  }
+  file.addEventListener('change',()=> file.files[0] && handle(file.files[0]));
+  return card;
+}
+function xbrlCard(){
+  const card=createEl('div',{class:'card'}); card.appendChild(createEl('h3',{},[document.createTextNode("XBRL Import (AOC-4)")]));
+  const drop=createEl('div',{class:'drop'},[document.createTextNode("Drop .xml/.xbrl here or click to browse")]);
+  const file=createEl('input',{type:'file',accept:'.xml,.xbrl',style:'display:none'});
+  drop.addEventListener('click',()=> file.click());
+  drop.addEventListener('dragover',e=>{ e.preventDefault(); drop.style.background="#0e1730"; });
+  drop.addEventListener('dragleave',()=> drop.style.background="");
+  drop.addEventListener('drop',e=>{ e.preventDefault(); handle(e.dataTransfer.files[0]); drop.style.background=""; });
+  const log=createEl('pre',{class:'small'}); card.appendChild(drop); card.appendChild(file); card.appendChild(log);
+  function handle(f){
+    const reader=new FileReader();
+    reader.onload=e=>{ try{ 
+      const xml=e.target.result; const doc=new DOMParser().parseFromString(xml,"text/xml");
+      const nums=[...doc.querySelectorAll('*')].filter(n=> n.children.length===0 && /\d/.test(n.textContent));
+      const facts=nums.map(n=>{ return { tag:n.tagName, value: Number(n.textContent.replace(/[, ]+/g,'')) || null }; }).filter(x=> x.value!==null);
+      function findBy(keys){ const k=keys.map(x=>x.toLowerCase()); return facts.find(f=> k.some(p=> f.tag.toLowerCase().includes(p))); }
+      const tmap=state.xbrlMap || DEFAULTS.xbrlMap;
+      const networth=findBy(tmap.netWorth)||null; const turnover=findBy(tmap.turnover)||null; const netprofit=findBy(tmap.netProfit)||null;
+      const ent=state.entities[0]?.name || "Entity"; const toCr=(x)=> x==null? "": (Math.abs(x)>1e7? (x/1e7) : x);
+      state.facts[ent]=state.facts[ent]||{};
+      if(turnover) state.facts[ent].turnoverCr=Number(toCr(turnover.value).toFixed(2));
+      if(networth) state.facts[ent].netWorthCr=Number(toCr(networth.value).toFixed(2));
+      if(netprofit) state.facts[ent].netProfitCr=Number(toCr(netprofit.value).toFixed(2));
+      save();
+      log.textContent="Facts mapped for "+ent+"\n"+JSON.stringify({turnover,networth,netprofit},null,2)+"\n(Adjust tag patterns in Settings if needed)";
+    }catch(err){ log.textContent="XBRL parse failed: "+err; } };
+    reader.readAsText(f);
+  }
+  file.addEventListener('change',()=> file.files[0] && handle(file.files[0]));
+  return card;
+}
+function helpCard(){
+  const c=createEl('div',{class:'card'});
+  c.appendChild(createEl('h3',{},[document.createTextNode("Mapping & Validation Notes")]));
+  c.appendChild(createEl('div',{class:'hint', html:`
+  • <b>CSR applies</b> if any: Net worth ≥ ₹500 Cr, Turnover ≥ ₹1000 Cr, Net Profit ≥ ₹5 Cr (configurable in Settings).<br>
+  • <b>RMC applies</b> if Top-1000 by m-cap or HVDLE (Outstanding NCS ≥ ₹1,000 Cr).<br>
+  • <b>Materiality</b> can be set per-entity in Entities; global fallback in Settings.<br>
+  • XBRL tag matching uses simple name patterns. If your AOC-4 tags differ, tweak patterns in Settings.
+  `}));
+  return c;
+}
+
+function renderIntegrations(){
+  PANEL.innerHTML="";
+  const card=createEl('div',{class:'card'});
+  card.appendChild(createEl('h3',{},[document.createTextNode("Slack / Teams Digest")]));
+  const slack=createEl('input',{class:'input', placeholder:'Slack Incoming Webhook URL', value: state.slackWebhook||""});
+  const teams=createEl('input',{class:'input', placeholder:'Teams Incoming Webhook URL', value: state.teamsWebhook||""});
+  const days=createEl('input',{class:'input', type:'number', step:'1', value: 21});
+  const saveBtn=createEl('button',{class:'button primary'},[document.createTextNode('Save Webhooks')]);
+  const sendBtn=createEl('button',{class:'button'},[document.createTextNode('Send Digest Now')]);
+  const logoRow=createEl('div',{class:'row'});
+  const logoFile=createEl('input',{type:'file', accept:'image/*'});
+  const logoSave=createEl('button',{class:'button'},[document.createTextNode('Upload Logo (header)')]);
+  const msg=createEl('pre',{class:'small'});
+  saveBtn.addEventListener('click',()=>{ state.slackWebhook=slack.value.trim(); state.teamsWebhook=teams.value.trim(); save(); alert("Saved webhooks."); });
+  sendBtn.addEventListener('click',()=> sendDigestNow(Number(days.value)||21));
+  logoSave.addEventListener('click',()=> logoFile.click());
+  logoFile.addEventListener('change',()=>{
+    const f=logoFile.files[0]; if(!f) return;
+    const reader=new FileReader();
+    reader.onload=e=>{ state.brandLogoDataUrl=e.target.result; save(); const img=document.getElementById('brandLogo'); img.src=state.brandLogoDataUrl; img.style.display='block'; alert("Logo updated."); };
+    reader.readAsDataURL(f);
+  });
+  card.appendChild(createEl('label',{},[document.createTextNode("Upcoming window (days)")])); card.appendChild(days);
+  card.appendChild(createEl('label',{},[document.createTextNode("Slack Webhook")])); card.appendChild(slack);
+  card.appendChild(createEl('label',{},[document.createTextNode("Teams Webhook")])); card.appendChild(teams);
+  card.appendChild(createEl('div',{class:'row'},[saveBtn, sendBtn]));
+  const logoLbl=createEl('label',{},[document.createTextNode("Branding")]); logoRow.appendChild(logoFile); logoRow.appendChild(logoSave);
+  card.appendChild(logoLbl); card.appendChild(logoRow); card.appendChild(msg);
+  PANEL.appendChild(card);
+}
+
+function gatherTasks(daysWindow=21){
+  const lodr = lodrDueDates();
+  const tasks=[];
+  for(const e of state.entities){
+    const a=computeApplicability(e.name); const d=computeAGMDerived(e.name);
+    tasks.push(row(e.name,"Companies Act","AOC-4 — Financials (Sec 137)","Yes",ownerFor(e.name,'cs')+" + "+ownerFor(e.name,'finance'),d.aoc4,"Within 30 days of AGM",d.agm));
+    tasks.push(row(e.name,"Companies Act","MGT-7 — Annual Return (Sec 92)","Yes",ownerFor(e.name,'cs'),d.mgt7,"Within 60 days of AGM",d.agm));
+    if(e.name==="Max Estates Limited (MEL)"){ 
+      tasks.push(row(e.name,"SEBI LODR","Reg 31 — Shareholding Pattern (Q)","Yes",ownerFor(e.name,'cs'),lodr.reg31,"Within 21 days of QE ("+lodr.qe+")",""));
+      tasks.push(row(e.name,"SEBI LODR","Reg 27(2) — CG Report (Q)","Yes",ownerFor(e.name,'cs'),lodr.reg27,"Within 21 days of QE ("+lodr.qe+")",""));
+      tasks.push(row(e.name,"SEBI LODR","Reg 33 — Financial Results (Q/A)","Yes",ownerFor(e.name,'cs')+" + "+ownerFor(e.name,'finance'),lodr.reg33_q,"Q:45 days from QE ("+lodr.qe+")",""));
+    }
+  }
+  const today=new Date(); today.setHours(0,0,0,0);
+  const cutoff=new Date(); cutoff.setDate(today.getDate()+daysWindow);
+  const within = tasks.filter(t=> t["Next Due Date"] && (new Date(t["Next Due Date"])<=cutoff));
+  const overdue = tasks.filter(t=> t["Next Due Date"] && (new Date(t["Next Due Date"])<today));
+  return { tasks, within, overdue };
+}
+
+async function sendDigestNow(daysWindow=21){
+  const {within, overdue} = gatherTasks(daysWindow);
+  const lines = [];
+  lines.push("*Compliance digest* (next "+daysWindow+" days)");
+  if(overdue.length){ lines.push(":warning: Overdue: "+overdue.length); }
+  within.forEach(t=> lines.push("• "+t["Entity"]+" — "+t["Compliance Item"]+" — due "+t["Next Due Date"]));
+  const text = lines.join("\n");
+  const payloadSlack = { text };
+  const payloadTeams = { text };
+  let ok=false, msg="";
+  try{
+    if(state.slackWebhook){
+      const r = await fetch(state.slackWebhook, {method:"POST", headers:{'Content-Type':'application/json'}, body: JSON.stringify(payloadSlack)});
+      ok = ok || r.ok; msg += "Slack:"+r.status+" ";
+    }
+    if(state.teamsWebhook){
+      const r2 = await fetch(state.teamsWebhook, {method:"POST", headers:{'Content-Type':'application/json'}, body: JSON.stringify(payloadTeams)});
+      ok = ok || r2.ok; msg += "Teams:"+r2.status+" ";
+    }
+  }catch(e){ msg += "Error:"+e; }
+  alert(ok? "Digest sent. "+msg : "Nothing sent. Configure webhooks in Integrations. "+msg);
+}
+
+function renderSettings(){
+  PANEL.innerHTML="";
+  const g=createEl('div',{class:'grid cols-3'},[
+    setting("Materiality (₹ Cr, global)", state.materialityCrore, v=> state.materialityCrore=Number(v)),
+    setting("Outstanding listed NCS (₹ Cr)", state.outstandingNCSCr, v=> state.outstandingNCSCr=Number(v)),
+    setting("Market Cap (₹ Cr, manual)", state.mcapCr, v=> state.mcapCr=Number(v)),
+    setting("Due soon threshold (days)", state.reminderDaysSoon, v=> state.reminderDaysSoon=Number(v)),
+    setting("CSR Net Worth (₹ Cr)", state.csrThresholds.netWorthCr, v=> state.csrThresholds.netWorthCr=Number(v)),
+    setting("CSR Turnover (₹ Cr)", state.csrThresholds.turnoverCr, v=> state.csrThresholds.turnoverCr=Number(v)),
+    setting("CSR Net Profit (₹ Cr)", state.csrThresholds.netProfitCr, v=> state.csrThresholds.netProfitCr=Number(v)),
+  ]);
+  const saveBtn = createEl('button',{class:'button primary'},[document.createTextNode('Save Settings')]);
+  const resetBtn = createEl('button',{class:'button'},[document.createTextNode('Reset to Defaults')]);
+  PANEL.appendChild(g); PANEL.appendChild(createEl('div',{class:'row'},[saveBtn, resetBtn]));
+  PANEL.appendChild(createEl('hr'));
+  PANEL.appendChild(createEl('div',{class:'hint'},[document.createTextNode("Auto-refresh runs only while this page is open. For server-side scheduling, use n8n/Cloud task to push digest to Slack/Teams.")]));
+
+  saveBtn.addEventListener('click', ()=>{ save(); alert("Saved."); });
+  resetBtn.addEventListener('click', ()=>{ localStorage.removeItem("cd_enterprise_plus"); state=JSON.parse(JSON.stringify(DEFAULTS)); save(); renderSettings(); });
+  function setting(label,val,on){
+    const box=createEl('div',{class:'card'}); box.appendChild(createEl('label',{},[document.createTextNode(label)]));
+    const inp=createEl('input',{class:'input', value: val}); inp.addEventListener('input',()=> on(inp.value)); box.appendChild(inp); return box;
+  }
+}
+
+function btn(label, fn){ const b=createEl('button',{class:'button'},[document.createTextNode(label)]); b.addEventListener('click',fn); return b; }
+
+const tabs=document.querySelectorAll('.tab');
+tabs.forEach(b=> b.addEventListener('click',()=>{ tabs.forEach(x=>x.classList.remove('active')); b.classList.add('active'); const t=b.getAttribute('data-tab'); if(t==='dashboard') renderDashboard(); if(t==='entities') renderEntities(); if(t==='import') renderImport(); if(t==='integrations') renderIntegrations(); if(t==='settings') renderSettings(); if(t==='about') renderAbout(); }));
+
+function renderAbout(){
+  PANEL.innerHTML="";
+  const left=createEl('div',{class:'card'}); left.appendChild(createEl('h3',{},[document.createTextNode("Quick Start")]));
+  left.appendChild(createEl('div',{class:'hint', html:`
+  1) <b>Integrations → Upload Logo</b> for branding.<br>
+  2) <b>Import</b> → Load Sample Feed or paste your JSON endpoint; optionally set auto-refresh mins.<br>
+  3) <b>Entities</b> → set per-entity materiality & owners; enter FY numbers if needed.<br>
+  4) <b>Dashboard</b> → check LODR dates auto-computed; export ICS/CSV or send Slack/Teams digest.<br><br>
+  <b>Schema tip</b> (JSON): include <code>materialityCr</code> per entity to prefill per-entity thresholds.
+  `}));
+  const right=createEl('div',{class:'card'});
+  right.appendChild(createEl('h3',{},[document.createTextNode("Feed Schema Example")]));
+  const example = `{
+  "global": { "materialityCrore": 1.5, "csrThresholds": { "netWorthCr": 500, "turnoverCr": 1000, "netProfitCr": 5 }, "outstandingNCSCr": 0, "mcapCr": 7247 },
+  "entities": [
+    { "name": "Max Estates Limited (MEL)", "agm": "2025-09-18", "owners": { "cs": "Abhishek Mishra", "finance": "Nitin Kumar Kansal" }, "facts": { "turnoverCr": 120, "netWorthCr": 650, "netProfitCr": 40.8 }, "materialityCr": 2.0 }
+  ]
+}`;
+  right.appendChild(createEl('pre',{class:'small'},[document.createTextNode(example)]));
+  PANEL.appendChild(createEl('div',{class:'grid cols-2'},[left,right]));
+}
+
+renderDashboard();
+setupAutoRefresh();
+</script>
+</body>
+</html>
